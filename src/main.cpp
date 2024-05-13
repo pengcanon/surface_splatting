@@ -55,6 +55,14 @@ void mesh_to_surfel(std::vector<Eigen::Vector3f> const& vertices,
     std::vector<Surfel>& surfels);
 
 void
+load_pcd_norm_color(std::string const& filename, std::vector<
+    Eigen::Vector3f>& vertices, std::vector<Eigen::Vector3f>& normals, std::vector<Eigen::Vector3f>& colors);
+
+void ply_to_surfel(std::vector<Eigen::Vector3f> const& vertices,
+    std::vector<Eigen::Vector3f> const& normals, std::vector<Eigen::Vector3f> const& colors,
+    std::vector<Surfel>& surfels);
+
+void
 load_plane(unsigned int n)
 {
     const float d = 1.0f / static_cast<float>(2 * n);
@@ -261,8 +269,10 @@ load_dragon()
 
     try
     {
-        load_triangle_mesh("stanford_dragon_v344k_f688k.raw",
-            vertices, faces);
+        //load_triangle_mesh("stanford_dragon_v344k_f688k.raw",
+        //    vertices, faces);
+        load_triangle_mesh("player_mesh.bin",
+                vertices, faces);
     }
     catch (std::runtime_error const& e)
     {
@@ -274,6 +284,98 @@ load_dragon()
         vertices, faces, normals);
 
     mesh_to_surfel(vertices, faces, g_surfels);
+}
+
+void load_body_pcd()
+{
+    std::vector<Eigen::Vector3f>              vertices, normals, colors;
+
+    try
+    {
+        load_pcd_norm_color("player_mesh_color.bin",
+            vertices, normals, colors);
+    }
+    catch (std::runtime_error const& e)
+    {
+        std::cerr << e.what() << std::endl;
+        std::exit(EXIT_FAILURE);
+    }
+
+    ply_to_surfel(vertices, normals, colors, g_surfels);
+}
+
+void
+load_bin(std::string const& filename, std::vector<Eigen::Vector3f>& vertices,
+    std::vector<Eigen::Vector3f>& normals, std::vector<Eigen::Vector3f>& colors)
+{
+    std::ifstream input(filename, std::ios::in | std::ios::binary);
+
+    if (input.fail())
+    {
+        std::ostringstream error_message;
+        error_message << "Error: Can not open "
+            << filename << "." << std::endl;
+
+        throw std::runtime_error(error_message.str().c_str());
+    }
+
+    unsigned int nv;
+    input.read(reinterpret_cast<char*>(&nv), sizeof(unsigned int));
+    vertices.resize(nv);
+
+    for (unsigned int i(0); i < nv; ++i)
+    {
+        input.read(reinterpret_cast<char*>(vertices[i].data()),
+            3 * sizeof(float));
+    }
+
+    unsigned int nf;
+    input.read(reinterpret_cast<char*>(&nf), sizeof(unsigned int));
+    normals.resize(nf);
+
+    for (unsigned int i(0); i < nf; ++i)
+    {
+        input.read(reinterpret_cast<char*>(normals[i].data()),
+            3 * sizeof(float));
+    }
+
+    unsigned int nc;
+    input.read(reinterpret_cast<char*>(&nc), sizeof(unsigned int));
+    colors.resize(nc);
+
+    for (unsigned int i(0); i < nc; ++i)
+    {
+        input.read(reinterpret_cast<char*>(colors[i].data()),
+            3 * sizeof(float));
+    }
+
+    input.close();
+}
+
+void
+load_pcd_norm_color(std::string const& filename, std::vector<
+    Eigen::Vector3f>& vertices, std::vector<Eigen::Vector3f>& normals, std::vector<Eigen::Vector3f>& colors)
+{
+    std::cout << "\nRead " << filename << "." << std::endl;
+    std::ifstream input(filename);
+
+    if (input.good())
+    {
+        input.close();
+        load_bin(filename, vertices, normals, colors);
+    }
+    else
+    {
+        input.close();
+
+        std::ostringstream fqfn;
+        fqfn << path_resources;
+        fqfn << filename;
+        load_bin(fqfn.str(), vertices, normals, colors);
+    }
+
+    std::cout << "  #vertices " << vertices.size() << std::endl;
+    std::cout << "  #normals    " << normals.size() << std::endl;
 }
 
 void
@@ -289,6 +391,7 @@ load_model()
             break;
         default:
             load_dragon();
+            //load_body_pcd();
     }
 }
 
@@ -474,6 +577,88 @@ mesh_to_surfel(std::vector<Eigen::Vector3f> const& vertices,
     for (auto& t : threads) { t.join(); }
 }
 
+
+void ellipse_from_pnml(float const* v_ptr, float const* n_ptr, float* p0_ptr, float* t1_ptr, float* t2_ptr)
+{
+    Vector3f d0, d1;
+    {
+        Map<const Vector3f> v(v_ptr);
+        Map<const Vector3f> n(n_ptr);
+        d0 = v; //compute the center of the ellipse as the exact location of the vertex
+        d1 = n;
+    }
+
+    Map<Vector3f> p0(p0_ptr), t1(t1_ptr), t2(t2_ptr);
+    {
+        p0 = d0; //assign the center of the ellipse to be the location of the vertex
+
+        //now calculate two orthognal vectors
+        Vector3f arbitraryVec;
+        if (d1 != Vector3f::UnitX()) {
+            arbitraryVec = Vector3f::UnitX();
+        }
+        else {
+            arbitraryVec = Vector3f::UnitY();
+        }
+
+        // Calculate the first vector on the plane
+        t1 = d1.cross(arbitraryVec);
+        t1.normalize(); // Normalize t1
+
+        // Calculate the second vector on the plane
+        t2 = d1.cross(t1);
+        t2.normalize(); // Normalize t2
+    }
+}
+
+void pcd_to_surfel(Eigen::Vector3f const& vertex,
+    Eigen::Vector3f const& normal, Eigen::Vector3f const& color,
+    Surfel& surfel)
+{
+    Vector3f p0, t1, t2;
+    /*
+        ellipse_from_pnml(vertex.data(), normal.data(),
+        p0.data(), t1.data(), t2.data()
+    );
+    */
+
+    surfel.c = vertex;
+    //surfel.u = t1;
+    //surfel.v = t2;
+    surfel.u = Vector3f(1.0f, 0.0f, 0.0f);
+    surfel.v = Vector3f(0.0f, 1.0f, 0.0f);
+    surfel.p = Vector3f::Zero();
+
+    float r = color(0), g = color(1), b = color(2);
+    surfel.rgba = static_cast<unsigned int>(r * 255.0f)
+        | (static_cast<unsigned int>(g * 255.0f) << 8)
+        | (static_cast<unsigned int>(b * 255.0f) << 16);
+}
+
+void ply_to_surfel(std::vector<Eigen::Vector3f> const& vertices,
+    std::vector<Eigen::Vector3f> const& normals, std::vector<Eigen::Vector3f> const& colors,
+    std::vector<Surfel>& surfels)
+{
+    surfels.resize(vertices.size());
+
+    std::vector<std::thread> threads(std::thread::hardware_concurrency());
+
+    for (std::size_t i(0); i < threads.size(); ++i)
+    {
+        std::size_t b = i * vertices.size() / threads.size();
+        std::size_t e = (i + 1) * vertices.size() / threads.size();
+
+        threads[i] = std::thread([b, e, &vertices, &normals, &colors, &surfels]() {
+            for (std::size_t j = b; j < e; ++j)
+            {
+                pcd_to_surfel(vertices[j], normals[j], colors[j], surfels[j]);
+            }
+            });
+    }
+
+    for (auto& t : threads) { t.join(); }
+}
+
 void
 display()
 {
@@ -487,7 +672,7 @@ reshape(int width, int height)
         static_cast<float>(height);
 
     glViewport(0, 0, width, height);
-    g_camera.set_perspective(60.0f, aspect, 0.005f, 5.0f);
+    g_camera.set_perspective(10.0f, aspect, 0.005f, 5.0f);
 }
 
 void

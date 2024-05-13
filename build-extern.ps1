@@ -36,15 +36,20 @@ if (-Not (Test-Path $vswhere))
     Invoke-WebRequest -Uri "$uri/$vswhere" -OutFile $vswhere
 }
 
-$msvc = & ./$vswhere -legacy -latest -format json | ConvertFrom-Json
+#$msvc = & ./$vswhere -legacy -latest -format json | ConvertFrom-Json
+$msvc = & ./$vswhere -format json | ConvertFrom-Json
+#Write-Host "vswhere.exe output: $msvc"
 popd
 
+$msvc=$msvc[0]
 if ($msvc)
 {
     $path = $msvc.installationPath
     $version = [Version]$msvc.installationVersion
+    Write-Host "$path"
+    Write-Host "$version"
 
-    if (($version.Major -eq 16) -or ($version.Major -eq 15))
+    if (($version.Major -eq 17) -or ($version.Major -eq 16) -or ($version.Major -eq 15))
     {
         $global:msvc = Join-Path -Path $msvc.installationPath `
                                  -ChildPath 'VC\Auxiliary\Build'

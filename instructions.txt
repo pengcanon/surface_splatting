@@ -1,0 +1,16 @@
+1) Don't need .sh [This is meant for Unix projects] . Make sure to delete .extern folder before moving forward
+2) Need to use .cmd using powershell
+ 
+-Sets rules and executes .ps1
+-Issue is .ps1 is outdated so have to make some modifications to it
+-So replace build-extern.ps1 with this one before running build-extern.cmd in powershell
+ 
+3)After running .cmd in powershell it'll build the .extern with the necessary windows depencencies
+4)Delete everything in build folder if not empty already
+5) Run Command: cmake ..
+	cmake -DGLviz_DIR=C:\Users\CanonUser\Documents\GitHub\surface_splatting\.extern\build\glviz-release-prefix\src\glviz-release-stamp ..
+6)Will Build a Visual Studio Project (No more VS Code )
+7)Build Project in VS Studio
+8)In the solution explorer in the right of VS Studio, right click on surface_splatting and select "Set as Startup Project"
+ 
+Should now be able to add breakpoints and debug code
